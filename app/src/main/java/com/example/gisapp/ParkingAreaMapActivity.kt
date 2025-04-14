@@ -175,7 +175,7 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         val future: ListenableFuture<FeatureQueryResult>? = featureTable.queryFeaturesAsync(query)
         future?.addDoneListener {
             try {
-                val result = future?.get()
+                val result = future.get()
                 if (result != null) {
                     Log.d("Map", "Found ${result.count()} features to preselect")
                     for (feature in result) {
@@ -257,13 +257,39 @@ class ParkingAreaMapActivity : AppCompatActivity() {
     private fun drawGrayOutlineOverlay(feature: Feature) {
         val geometry = feature.geometry ?: return
 
+        // Draw filled polygon with gray outline
         val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GRAY, 2f)
-        val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.SOLID,
-            "#A5D6A7".toColorInt(), outlineSymbol)
-        val graphic = Graphic(geometry, fillSymbol)
+        val fillSymbol = SimpleFillSymbol(
+            SimpleFillSymbol.Style.SOLID,
+            "#A5D6A7".toColorInt(),
+            outlineSymbol
+        )
+        val polygonGraphic = Graphic(geometry, fillSymbol)
+        selectedOverlays.graphics.add(polygonGraphic)
 
-        selectedOverlays.graphics.add(graphic)
+        // Extract center point of the polygon
+        val centerPoint = geometry.extent?.center ?: return
+
+        // Get area name from attributes
+        val areaName = feature.attributes["NAME_ENGLISH"]?.toString() ?: ""
+
+        // Create a text symbol
+        val textSymbol = TextSymbol(
+            14f,
+            areaName,
+            Color.BLACK,
+            TextSymbol.HorizontalAlignment.CENTER,
+            TextSymbol.VerticalAlignment.MIDDLE
+        ).apply {
+            outlineColor = Color.WHITE
+            outlineWidth = 2f
+        }
+
+        // Add text label as graphic
+        val textGraphic = Graphic(centerPoint, textSymbol)
+        selectedOverlays.graphics.add(textGraphic)
     }
+
 
     /**
      * Clears graphic overlays for a given feature.
