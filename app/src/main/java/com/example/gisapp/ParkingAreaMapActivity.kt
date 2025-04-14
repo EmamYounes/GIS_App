@@ -1,5 +1,6 @@
 package com.example.gisapp
 
+import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
@@ -17,29 +18,48 @@ import com.esri.arcgisruntime.security.UserCredential
 import com.esri.arcgisruntime.symbology.*
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.launch
+import androidx.core.graphics.toColorInt
 
+/**
+ * Activity that displays a map showing parking areas using ArcGIS SDK.
+ * Supports preselecting areas, displaying user location, and feature selection on tap.
+ */
 class ParkingAreaMapActivity : AppCompatActivity() {
 
+    // MapView used to display the ArcGIS map
     private lateinit var mapView: MapView
+
+    // Floating action button to zoom to user location
     private lateinit var locationButton: FloatingActionButton
+
+    // Feature layer for parking areas
     private var featureLayer: FeatureLayer? = null
+
+    // List of currently selected features
     private val selectedFeatures = mutableListOf<Feature>()
+
+    // Overlay used to draw custom graphics on top of selected features
     private val selectedOverlays = GraphicsOverlay()
+
+    // Flags to ensure location marker and zoom are applied only once
     private var locationMarkerAdded = false
     private var hasZoomedToUserLocation = false
 
-    private val parkingLayerUrl =
-        "https://unifiedmap.shj.ae/server/rest/services/SHJMUN/Parking_AREAS/MapServer/0"
+    // URL of the parking feature layer
+    private val parkingLayerUrl = "https://unifiedmap.shj.ae/server/rest/services/SHJMUN/Parking_AREAS/MapServer/0"
 
+    // Area IDs to be preselected when the map is loaded
     private var preselectedAreaIDs: List<Int> = listOf(15, 16)
 
+    /**
+     * Initializes UI and map when activity is created.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         mapView = findViewById(R.id.mapView)
         locationButton = findViewById(R.id.locationButton)
-
         mapView.graphicsOverlays.add(selectedOverlays)
 
         setupMap()
@@ -47,6 +67,9 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         setupLocationButton()
     }
 
+    /**
+     * Sets up listener for location button to zoom to user's current location.
+     */
     private fun setupLocationButton() {
         locationButton.setOnClickListener {
             val location = mapView.locationDisplay.location?.position
@@ -59,6 +82,10 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Initializes the map, loads the parking feature layer,
+     * sets up symbol renderer, location tracking, and preselects specific features.
+     */
     private fun setupMap() {
         val map = ArcGISMap(Basemap.createLightGrayCanvasVector())
         mapView.map = map
@@ -75,11 +102,12 @@ class ParkingAreaMapActivity : AppCompatActivity() {
                 val layer = FeatureLayer(serviceFeatureTable)
                 featureLayer = layer
 
+                // Default symbol renderer for unselected features
                 val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GREEN, 2f)
                 val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.NULL, 0x00000000, outlineSymbol)
                 layer.renderer = SimpleRenderer(fillSymbol)
 
-                // Disable default selection color and outline
+                // Remove default selection styling
                 layer.selectionColor = Color.TRANSPARENT
                 layer.selectionWidth = 0.0
 
@@ -100,6 +128,7 @@ class ParkingAreaMapActivity : AppCompatActivity() {
                 Log.e("Map", "FeatureTable failed to load: ${serviceFeatureTable.loadError?.message}")
             }
         }
+
         serviceFeatureTable.loadAsync()
 
         mapView.locationDisplay.apply {
@@ -130,6 +159,9 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Queries and selects features from the feature table based on preselectedAreaIDs.
+     */
     private fun preselectFeatures(featureTable: ServiceFeatureTable) {
         if (preselectedAreaIDs.isEmpty()) {
             Log.d("Map", "No preselectedAreaIDs provided")
@@ -147,32 +179,17 @@ class ParkingAreaMapActivity : AppCompatActivity() {
                 if (result != null) {
                     Log.d("Map", "Found ${result.count()} features to preselect")
                     for (feature in result) {
-                        // Check if the feature ID is in the preselectedAreaIDs list
                         val featureId = feature.attributes["ID"].toString().toInt()
-                        if (featureId != null && preselectedAreaIDs.contains(featureId)) {
-//                            // Create a custom symbol for preselected features (different color)
-//                            val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GRAY, 3f) // Red outline for preselected
-//                            val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.NULL, 0x00000000, outlineSymbol)
-//                            val renderer = SimpleRenderer(fillSymbol)
-//
-//                            // Apply the custom renderer to the specific feature
-//                            featureLayer?.renderer = renderer
-
-//                            selectedFeatures.add(feature)
+                        if (preselectedAreaIDs.contains(featureId)) {
                             featureLayer?.selectFeature(feature)
                             drawGrayOutlineOverlay(feature)
-
                         } else {
-                            // Apply default renderer for non-preselected features
-                            val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GREEN, 2f) // Gray outline for non-preselected
+                            val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GREEN, 2f)
                             val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.NULL, 0x00000000, outlineSymbol)
                             val renderer = SimpleRenderer(fillSymbol)
-
-                            // Apply default renderer
                             featureLayer?.renderer = renderer
                         }
 
-                        // Select and add to the list of selected features
                         featureLayer?.selectFeature(feature)
                         selectedFeatures.add(feature)
                     }
@@ -184,6 +201,10 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Sets up listener to detect user taps on the map and identify tapped features.
+     */
+    @SuppressLint("ClickableViewAccessibility")
     private fun setupTapListener() {
         mapView.setOnTouchListener(object : DefaultMapViewOnTouchListener(this, mapView) {
             override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
@@ -194,6 +215,10 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         })
     }
 
+    /**
+     * Identifies features at the tapped location and selects them.
+     * Limits selection to 2 features at a time.
+     */
     private fun identifyFeatureManually(screenPoint: android.graphics.Point) {
         val layer = featureLayer ?: return
 
@@ -202,9 +227,12 @@ class ParkingAreaMapActivity : AppCompatActivity() {
             try {
                 val result = identifyFuture.get()
                 val feature = result.elements.firstOrNull() as? Feature ?: return@addDoneListener
-                val id = feature.attributes["ID"].toString().toIntOrNull()
+                val clickedId = feature.attributes["ID"]?.toString()?.toIntOrNull()
 
-                if (selectedFeatures.any { (it.attributes["ID"] as? Int) == id }) return@addDoneListener
+                val alreadySelected = selectedFeatures.any {
+                    it.attributes["ID"]?.toString()?.toIntOrNull() == clickedId
+                }
+                if (alreadySelected) return@addDoneListener
 
                 if (selectedFeatures.size >= 2) {
                     val first = selectedFeatures.removeAt(0)
@@ -223,21 +251,31 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Draws a filled light green polygon with a gray outline to represent a selected feature.
+     */
     private fun drawGrayOutlineOverlay(feature: Feature) {
         val geometry = feature.geometry ?: return
 
-        val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GRAY, 3f)
-        val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.NULL, 0x00000000, outlineSymbol)
+        val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GRAY, 2f)
+        val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.SOLID,
+            "#A5D6A7".toColorInt(), outlineSymbol)
         val graphic = Graphic(geometry, fillSymbol)
 
         selectedOverlays.graphics.add(graphic)
     }
 
+    /**
+     * Clears graphic overlays for a given feature.
+     */
     private fun clearOverlayForFeature(feature: Feature) {
         val geom = feature.geometry
         selectedOverlays.graphics.removeAll { it.geometry == geom }
     }
 
+    /**
+     * Zooms the map to encompass all currently selected features.
+     */
     private fun zoomToSelectedFeatures() {
         if (selectedFeatures.isEmpty()) return
 
@@ -249,16 +287,25 @@ class ParkingAreaMapActivity : AppCompatActivity() {
         mapView.setViewpointAsync(Viewpoint(expanded))
     }
 
+    /**
+     * Pauses the map view to save resources.
+     */
     override fun onPause() {
         super.onPause()
         mapView.pause()
     }
 
+    /**
+     * Resumes the map view when activity is resumed.
+     */
     override fun onResume() {
         super.onResume()
         mapView.resume()
     }
 
+    /**
+     * Cleans up the map view to prevent memory leaks.
+     */
     override fun onDestroy() {
         super.onDestroy()
         mapView.dispose()
