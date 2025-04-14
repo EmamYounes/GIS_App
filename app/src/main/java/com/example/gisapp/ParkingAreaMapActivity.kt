@@ -123,6 +123,8 @@ class ParkingAreaMapActivity : AppCompatActivity() {
 
                 lifecycleScope.launch {
                     preselectFeatures(serviceFeatureTable)
+                    // Call to display names after preselecting features
+                    displayNamesForAreasWithId(serviceFeatureTable)
                 }
             } else {
                 Log.e("Map", "FeatureTable failed to load: ${serviceFeatureTable.loadError?.message}")
@@ -206,13 +208,13 @@ class ParkingAreaMapActivity : AppCompatActivity() {
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun setupTapListener() {
-        mapView.setOnTouchListener(object : DefaultMapViewOnTouchListener(this, mapView) {
+        mapView.onTouchListener = object : DefaultMapViewOnTouchListener(this, mapView) {
             override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
                 val screenPoint = android.graphics.Point(e.x.toInt(), e.y.toInt())
                 identifyFeatureManually(screenPoint)
                 return true
             }
-        })
+        }
     }
 
     /**
@@ -250,6 +252,59 @@ class ParkingAreaMapActivity : AppCompatActivity() {
             }
         }
     }
+
+
+
+    private fun displayNamesForAreasWithId(featureTable: ServiceFeatureTable) {
+        // Query to fetch all areas that have a valid ID
+        val whereClause = "ID IS NOT NULL" // Fetch all areas with an ID
+        val query = QueryParameters().apply { this.whereClause = whereClause }
+
+        val future: ListenableFuture<FeatureQueryResult>? = featureTable.queryFeaturesAsync(query)
+        future?.addDoneListener {
+            try {
+                val result = future.get()
+                if (result != null) {
+                    Log.d("Map", "Found ${result.count()} features with IDs to display")
+                    for (feature in result) {
+                        val featureId = feature.attributes["ID"].toString().toIntOrNull()
+                        if (featureId != null) {
+                            // Display the name for every feature with a valid ID
+                            showAreaName(feature)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("Map", "Feature query error", e)
+            }
+        }
+    }
+
+
+    private fun showAreaName(feature: Feature) {
+        val geometry = feature.geometry ?: return
+
+
+        // Extract center point of the polygon
+        val centerPoint = geometry.extent?.center ?: return
+
+        // Get area name from attributes
+        val areaName = feature.attributes["NAME_ENGLISH"]?.toString() ?: ""
+
+        // Create a text symbol for the area name
+        val textSymbol = TextSymbol(
+            14f, areaName, Color.BLACK,
+            TextSymbol.HorizontalAlignment.CENTER, TextSymbol.VerticalAlignment.MIDDLE
+        ).apply {
+            outlineColor = Color.WHITE
+            outlineWidth = 2f
+        }
+
+        // Add the area name as a text graphic
+        val textGraphic = Graphic(centerPoint, textSymbol)
+        selectedOverlays.graphics.add(textGraphic)
+    }
+
 
     /**
      * Draws a filled light green polygon with a gray outline to represent a selected feature.
