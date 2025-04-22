@@ -6,19 +6,38 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.toColorInt
 import androidx.lifecycle.lifecycleScope
 import com.esri.arcgisruntime.concurrent.ListenableFuture
-import com.esri.arcgisruntime.data.*
-import com.esri.arcgisruntime.geometry.*
+import com.esri.arcgisruntime.data.Feature
+import com.esri.arcgisruntime.data.FeatureQueryResult
+import com.esri.arcgisruntime.data.QueryParameters
+import com.esri.arcgisruntime.data.ServiceFeatureTable
+import com.esri.arcgisruntime.geometry.Envelope
+import com.esri.arcgisruntime.geometry.GeometryEngine
+import com.esri.arcgisruntime.geometry.Point
+import com.esri.arcgisruntime.geometry.SpatialReferences
 import com.esri.arcgisruntime.layers.FeatureLayer
 import com.esri.arcgisruntime.loadable.LoadStatus
-import com.esri.arcgisruntime.mapping.*
-import com.esri.arcgisruntime.mapping.view.*
+import com.esri.arcgisruntime.mapping.ArcGISMap
+import com.esri.arcgisruntime.mapping.Basemap
+import com.esri.arcgisruntime.mapping.Viewpoint
+import com.esri.arcgisruntime.mapping.view.DefaultMapViewOnTouchListener
+import com.esri.arcgisruntime.mapping.view.Graphic
+import com.esri.arcgisruntime.mapping.view.GraphicsOverlay
+import com.esri.arcgisruntime.mapping.view.LocationDisplay
+import com.esri.arcgisruntime.mapping.view.MapView
 import com.esri.arcgisruntime.security.UserCredential
-import com.esri.arcgisruntime.symbology.*
+import com.esri.arcgisruntime.symbology.SimpleFillSymbol
+import com.esri.arcgisruntime.symbology.SimpleLineSymbol
+import com.esri.arcgisruntime.symbology.SimpleMarkerSymbol
+import com.esri.arcgisruntime.symbology.SimpleRenderer
+import com.esri.arcgisruntime.symbology.TextSymbol
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.launch
-import androidx.core.graphics.toColorInt
+import java.io.InputStream
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 
 /**
  * Activity that displays a map showing parking areas using ArcGIS SDK.
@@ -46,7 +65,8 @@ class ParkingAreaMapActivity : AppCompatActivity() {
     private var hasZoomedToUserLocation = false
 
     // URL of the parking feature layer
-    private val parkingLayerUrl = "https://unifiedmap.shj.ae/server/rest/services/SHJMUN/Parking_AREAS/MapServer/0"
+    private val parkingLayerUrl =
+        "https://unifiedmap.shj.ae/server/rest/services/SHJMUN/Parking_AREAS/MapServer/0"
 
     // Area IDs to be preselected when the map is loaded
     private var preselectedAreaIDs: List<Int> = listOf(15, 16)
@@ -57,6 +77,10 @@ class ParkingAreaMapActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        val certificateInputStream: InputStream = resources.openRawResource(R.raw.unifiedmap_shj_ae)
+
+        val certificateFactory = CertificateFactory.getInstance("X.509")
+        val certificate: X509Certificate = certificateFactory.generateCertificate(certificateInputStream) as X509Certificate
 
         mapView = findViewById(R.id.mapView)
         locationButton = findViewById(R.id.locationButton)
@@ -104,7 +128,8 @@ class ParkingAreaMapActivity : AppCompatActivity() {
 
                 // Default symbol renderer for unselected features
                 val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GREEN, 2f)
-                val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.NULL, 0x00000000, outlineSymbol)
+                val fillSymbol =
+                    SimpleFillSymbol(SimpleFillSymbol.Style.NULL, 0x00000000, outlineSymbol)
                 layer.renderer = SimpleRenderer(fillSymbol)
 
                 // Remove default selection styling
@@ -127,7 +152,21 @@ class ParkingAreaMapActivity : AppCompatActivity() {
                     displayNamesForAreasWithId(serviceFeatureTable)
                 }
             } else {
-                Log.e("Map", "FeatureTable failed to load: ${serviceFeatureTable.loadError?.message}")
+                val error = serviceFeatureTable.loadError
+                Log.e("Map", "FeatureTable failed to load: ${error?.message}", error)
+
+                // Custom SSL Handshake exception handling
+                var currentCause = error?.cause
+                while (currentCause != null) {
+                        Log.e(
+                            "Map",
+                            "SSL Handshake Exception encountered: ${currentCause.message}",
+                            currentCause
+                        )
+                        break
+
+                    currentCause = currentCause.cause
+                }
             }
         }
 
@@ -186,8 +225,13 @@ class ParkingAreaMapActivity : AppCompatActivity() {
                             featureLayer?.selectFeature(feature)
                             drawGrayOutlineOverlay(feature)
                         } else {
-                            val outlineSymbol = SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GREEN, 2f)
-                            val fillSymbol = SimpleFillSymbol(SimpleFillSymbol.Style.NULL, 0x00000000, outlineSymbol)
+                            val outlineSymbol =
+                                SimpleLineSymbol(SimpleLineSymbol.Style.SOLID, Color.GREEN, 2f)
+                            val fillSymbol = SimpleFillSymbol(
+                                SimpleFillSymbol.Style.NULL,
+                                0x00000000,
+                                outlineSymbol
+                            )
                             val renderer = SimpleRenderer(fillSymbol)
                             featureLayer?.renderer = renderer
                         }
@@ -252,7 +296,6 @@ class ParkingAreaMapActivity : AppCompatActivity() {
             }
         }
     }
-
 
 
     private fun displayNamesForAreasWithId(featureTable: ServiceFeatureTable) {

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">unifiedmap.shj.ae</domain>
+        <trust-anchors>
+            <certificates src="@raw/unifiedmap_shj_ae" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
